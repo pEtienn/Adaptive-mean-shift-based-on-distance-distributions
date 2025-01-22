@@ -76,4 +76,4 @@ The $\gamma$ function is not well tested as a kde, so there might be so unforsee
 
 ## Computional complexity
 
-The complexity of this algorithm is currently $O(n^2 \log n)$, which is due to calculating sorted distance distributions for each points. It could potentially be reduced for large datasets by using a smaller maximum cluster size and finding nearest neighbors and their distance instead of sorting the whole distance matrix. Assuming m=max cluster size, the complexity could go down to $O(nm \log n)$, or even lower with approximate nearest neighbor search.
+The complexity of this algorithm is currently $O(n^2\ \log\ n)$, which is due to calculating sorted distance distributions for each points. It could potentially be reduced for large datasets by using a smaller maximum cluster size and finding nearest neighbors and their distance instead of sorting the whole distance matrix. Assuming m=max cluster size, the complexity could go down to $O(nm\ \log\ n)$, or even lower with approximate nearest neighbor search.
