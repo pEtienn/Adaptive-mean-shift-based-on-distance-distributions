@@ -24,6 +24,7 @@ This is also a good example of how distance distributions typically behave: ther
 Our example above was a distance distribution between the center of the distribution and points it generated. But the same is true for distance distributions between points: 
 
 *Let* $\mathbf{Y}_d$ *and* $\mathbf{Q}_d$ *be two d-dimensional distributions. Then, the squared Euclidean distance distribution* $X^2$ *between the 2 random points* $\mathbf{Q}$ and $\mathbf{Y}$ *is:*
+
 $$
     X^2=\parallel\mathbf{Y}-\mathbf{Q}\parallel^2=\sum_i(Y_i-Q_i)^2
 $$
