@@ -39,9 +39,11 @@ We assume here that distance distributions will have two modes, one for the loca
 Distance from each points to the star are shown on the left part of the figure. In this case the algorithm finds a bandwidth of around 2, where the min marker is on the left side.
 
 The $\gamma$ function acts mostly as a kde in this situation and detects the minimum density between both modes.
+
 $$
 \gamma (\mathbf X_{k})=\frac{Var(\mathbf X_{k})}{(\mathbf E[\mathbf X_{k}]-X_{(k)})^2},
 $$
+
 where $\mathbf X_{k}=[X_{(1)},\dots,X_{(k)}]$.
 The $\gamma$ function has high values before the first modes which avoid finding a minimum before the one we want to find. To avoid finding a minimum after the second mode we use a parameter called maxClusterSize with a default value of 0.75 which limits minimum finding to 75% of all closest neighbors. There is also another parameter called minClusterSize with default value 10 which is used to avoid the variance in density with the closest neighbors. Those parameters can be loosely set and their exact value won't affect the result.
 
