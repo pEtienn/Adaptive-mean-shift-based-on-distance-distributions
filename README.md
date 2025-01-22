@@ -17,7 +17,7 @@ You can test it with example.ipynb .
 ## Distance distribution
 A distance distribution is the distribution of distances from one point to other points. They can be derived mathematically for a particular distribution. For example, the isotropic normal distribution in $d$ dimensions has a chi distribution with $d$ degrees of freedom. The figure below shows graphically how the chi cdf can be derived by integrating on the gaussian pdf for a given radius.
 
-![Chi distribution](/figure/chi_2D_visualization.PNG){width=50%}
+![Chi distribution](/figure/chi_2D_visualization.PNG)
 
 This is also a good example of how distance distributions typically behave: there's a very low chance of drawing a distance near 0, a mode some distance away and a very low chance of drawing very large distances.
 
@@ -25,16 +25,16 @@ Our example above was a distance distribution between the center of the distribu
 
 *Let $\mathbf{Y}_d$ and $\mathbf{Q}_d$ be two d-dimensional distributions. Then, the squared Euclidean distance distribution $X^2$ between the 2 random points $\mathbf{Q}$ and $\mathbf{Y}$ is:*
 $$
-    X^2=||\mathbf{Y}-\mathbf{Q}||^2=\sum_i(Y_i-Q_i)^2
+    X^2=\parallel\mathbf{Y}-\mathbf{Q}\parallel^2=\sum_i(Y_i-Q_i)^2
 $$
 
-Assuming $\mathbf{Y}_d$ and $\mathbf{Q}_d$ follow the same distribution, then $||\mathbf{Y}-\mathbf{Q}||^2$ has twice the variance of $||\mathbf{Y}||^2$, among other properties. 
+Assuming $\mathbf{Y}_d$ and $\mathbf{Q}_d$ follow the same distribution, then $\parallel\mathbf{Y}-\mathbf{Q}\parallel^2$ has twice the variance of $\parallel\mathbf{Y}\parallel^2$, among other properties. 
 
 ## Using the minimum of the distance distribution density to estimate bandwidth for a distribution
 
 We assume here that distance distributions will have two modes, one for the local cluster we are interested in and another that represents distances to other distributions. The aim of our algorithm is to find the minimum density between those 2 modes, which will be our estimate for the local bandwidth. Below is an example:
 
-![Chi distribution](/figure/density.png){width=50%}
+![Chi distribution](/figure/density.png)
 Distance from each points to the star are shown on the left part of the figure. In this case the algorithm finds a bandwidth of around 2, where the min marker is on the left side.
 
 The $\gamma$ function acts mostly as a kde in this situation and detects the minimum density between both modes.
@@ -47,15 +47,17 @@ The $\gamma$ function has high values before the first modes which avoid finding
 ### Example results of cluster size estimation
 Below is an example where we esitmate the number of near neighbors (N) that are in the same cluster using the above method.
 ![Chi distribution](/figure/NestimateGood.png)
+
 The estimation is good for points near the center and away from other clusters but worse for points that are between clusters where in some cases it takes value we set for maxClusterSize.
 
 Here is another example were there is less separation between clusters and we can see that points between clusters get a N estimate above 700, which is determined by the parameter maxClusterSize in this case. Those estimates will be classified as bad and those points won't be clustered during the mean shift.
+
 ![Chi distribution](/figure/NestimateBad.png)
 
 ## Details on $\gamma$ function and the minimum detection
 
 The aim of $\gamma$ is to estimate de density, but it could have been done with standard KDE methods. Below is a figure comparing the 2.
-![Chi distribution](/figure/density_with_kde.png){width=50%}
+![Chi distribution](/figure/density_with_kde.png)
 
 The "kde" plot is obtained by performing kernel density estimation on the distance distribution from the star in the dataset on the right to all other points. As expected the density is low and varying a lot for low distances and there is a minimum between 2 modes. The minimum between the modes is the location we want to find. If we simply look for the minimum value of all kde values there might be 2 problems:
 1. The minimum might be found before the first mode.
