@@ -5,12 +5,12 @@ Implementation of an adaptive mean shift algorithm in python, intended to be use
 For each point, cluster size is estimated by locating the minimum density of the distance distribution from this point to all others. During the mean shift execution, the cluster size estimation is used to adaptively change the bandwidth. 
 
 ### Typical usage
-    ms=fctMS.AdaptiveMeanShift(X,minClusterSize=10,maxClusterSize=0.75,removeBadEstimates=True)
-    ms.meanShift(printClustersDebug=False)
-    ms.clusterUnlabeledPoints()
+    ms=fctMS.AdaptiveMeanShift(X,minClusterSize=10,maxClusterSize=0.75,removeBadEstimates=True) #initiates the class and estimates local cluster size
+    ms.meanShift(printClustersDebug=False) #performs mean shift
+    ms.clusterUnlabeledPoints() #cluster unlabeled points (those with bad cluster size estimates) to the closest cluster taking into account cluster scale
     labels=ms.labels
 
-There are 2 parameters: minClusterSize and maxClusterSize. Both can be set approximatively without affecting the results as long as all clusters have a size between the minimum cluster size and the maximum cluster size.
+There are 2 parameters: minClusterSize and maxClusterSize. Both can be set approximately without affecting the results as long as all clusters have a size between the minimum cluster size and the maximum cluster size.
 
 You can test it with example.ipynb .
 
@@ -51,9 +51,9 @@ The $\gamma$ function has high values before the first modes which avoid finding
 Below is an example where we esitmate the number of near neighbors (N) that are in the same cluster using the above method.
 ![Chi distribution](/figure/NestimateGood.png)
 
-The estimation is good for points near the center and away from other clusters but worse for points that are between clusters where in some cases it takes value we set for maxClusterSize.
+The cluster size estimation is good for points near the center and away from other clusters. But, it is worse for points that are between clusters, where in some cases it takes the value we set for maxClusterSize.
 
-Here is another example were there is less separation between clusters and we can see that points between clusters get a N estimate above 700, which is determined by the parameter maxClusterSize in this case. Those estimates will be classified as bad and those points won't be clustered during the mean shift.
+Here is another example where there is less separation between clusters and we can see that points between clusters get a N estimate above 700, which is determined by the parameter maxClusterSize in this case. Those estimates will be classified as bad and those points won't be clustered during the mean shift.
 
 ![Chi distribution](/figure/NestimateBad.png)
 
@@ -72,7 +72,7 @@ Looking at the formula you can see that if there's only 2 values, $\gamma(\mathb
 
 The second problem is solved by having the maximum cluster size parameters. Indeed, usually the density after the second mode is only smaller near the end. So removing the tail of the distance distribution is enough to avoid finding a minimum in density after the second mode.
 
-The $\gamma$ function is not well tested as a kde, so there might be so unforseen situations. It comes from (https://www.stat.cmu.edu/technometrics/59-69/VOL-01-03/v0103217.pdf) and was used as a maximum likelihood estimator for truncated normal distribution.
+The $\gamma$ function is not well tested as a kde, so there might be so unforeseen situations. It comes from (https://www.stat.cmu.edu/technometrics/59-69/VOL-01-03/v0103217.pdf) and was used as a maximum likelihood estimator for truncated normal distribution.
 
 ## Computional complexity
 
