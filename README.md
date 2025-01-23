@@ -15,7 +15,7 @@ There are 2 parameters: minClusterSize and maxClusterSize. Both can be set appro
 You can test it with example.ipynb .
 
 ## Distance distribution
-A distance distribution is the distribution of distances from one point to other points. They can be derived mathematically for a particular distribution. For example, the isotropic normal distribution in $d$ dimensions has a chi distribution with $d$ degrees of freedom. The figure below shows graphically how the chi cdf can be derived by integrating on the gaussian pdf for a given radius.
+A distance distribution is the distribution of distances from one point to other points. They can be derived mathematically for a particular distribution. For example, the isotropic Gaussian distribution in $d$ dimensions has a chi distribution with $d$ degrees of freedom. The figure below shows graphically how the chi cdf can be derived by integrating on the gaussian pdf for a given radius.
 
 ![Chi distribution](/figure/chi_2D_visualization.PNG)
 
@@ -38,14 +38,14 @@ We assume here that distance distributions will have two modes, one for the loca
 ![Chi distribution](/figure/density.png)
 Distance from each points to the star are shown on the left part of the figure. In this case the algorithm finds a bandwidth of around 2, where the min marker is on the left side.
 
-The $\gamma$ function acts mostly as a kde in this situation and detects the minimum density between both modes.
+The $\gamma$ function (more details below) acts mostly as a kernel density estimator in this situation and detects the minimum density between both modes.
 
 $$
 \gamma (\mathbf X_{k})=\frac{Var(\mathbf X_{k})}{(\mathbf E[\mathbf X_{k}]-X_{(k)})^2},
 $$
 
 where $\mathbf X_{k}=[X_{(1)},\dots,X_{(k)}]$.
-The $\gamma$ function has high values before the first modes which avoid finding a minimum before the one we want to find. To avoid finding a minimum after the second mode we use a parameter called maxClusterSize with a default value of 0.75 which limits minimum finding to 75% of all closest neighbors. There is also another parameter called minClusterSize with default value 10 which is used to avoid the variance in density with the closest neighbors. Those parameters can be loosely set and their exact value won't affect the result.
+The $\gamma$ function has high values before the first mode which avoid finding a minimum before the one we want to find. To avoid finding a minimum after the second mode we use a parameter called maxClusterSize which limits minimum finding the $maxClusterSize$  closest neighbors. There is also another parameter called minClusterSize with default value 10 which is used to avoid the variance in density with the closest neighbors. Those parameters can be loosely set and their exact value won't affect the result.
 
 ### Example results of cluster size estimation
 Below is an example where we esitmate the number of near neighbors (N) that are in the same cluster using the above method.
@@ -59,20 +59,20 @@ Here is another example where there is less separation between clusters and we c
 
 ## Details on $\gamma$ function and the minimum detection
 
-The aim of $\gamma$ is to estimate de density, but it could have been done with standard KDE methods. Below is a figure comparing the 2.
+The aim of $\gamma$ is to estimate de density, but it could have been done with standard Kernel Density Estimation (KDE) methods. Below is a figure comparing the 2.
 ![Chi distribution](/figure/density_with_kde.png)
 
-The "kde" plot is obtained by performing kernel density estimation on the distance distribution from the star in the dataset on the right to all other points. As expected the density is low and varying a lot for low distances and there is a minimum between 2 modes. The minimum between the modes is the location we want to find. If we simply look for the minimum value of all kde values there might be 2 problems:
+The "kde" plot is obtained by performing kernel density estimation on the distance distribution from the star in the dataset on the right to all other points. As expected the density is low and varying a lot for low distances and there is a minimum between 2 modes. The minimum between the modes is the location we want to find. If we simply look for the minimum value of all KDE values there might be 2 problems:
 1. The minimum might be found before the first mode.
 2. The minimum might be found after the second mode. 
 
-To address the first problem we use the function $\gamma$ instead of the kde. Experimentally, it effectively acts as a kde until the first minimum but has high values before that, which avoids detecting a minimum before the first mode. 
+To address the first problem we use the function $\gamma$ instead of a kernel density estimator. Experimentally, it effectively acts as a kernel density estimator until the first minimum but has high values before that, which avoids detecting a minimum before the first mode. 
 
 Looking at the formula you can see that if there's only 2 values, $\gamma(\mathbf X_{2})=1$. Also note that the denominator reacts a lot faster than the numerator and is inversly proportional to the density.
 
 The second problem is solved by having the maximum cluster size parameters. Indeed, usually the density after the second mode is only smaller near the end. So removing the tail of the distance distribution is enough to avoid finding a minimum in density after the second mode.
 
-The $\gamma$ function is not well tested as a kde, so there might be so unforeseen situations. It comes from (https://www.stat.cmu.edu/technometrics/59-69/VOL-01-03/v0103217.pdf) and was used as a maximum likelihood estimator for truncated normal distribution.
+The $\gamma$ function is not well tested as a kernel density estimator, so there might be so unforeseen situations. It comes from (https://www.stat.cmu.edu/technometrics/59-69/VOL-01-03/v0103217.pdf) and was used as a maximum likelihood estimator for truncated normal distributions.
 
 ## Computional complexity
 
