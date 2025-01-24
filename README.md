@@ -2,7 +2,7 @@
 
 Implementation of an adaptive mean shift algorithm in python, intended to be used on datasets with varying local scale.
 
-For each point, cluster size is estimated by locating the minimum density of the distance distribution from this point to all others. During the mean shift execution, the cluster size estimation is used to adaptively change the bandwidth. 
+For each point, a cluster size is estimated by locating the minimum density of the distance distribution from this point to all others. During the mean shift execution, the cluster size estimation is used to adaptively change the bandwidth. 
 
 ### Typical usage
     ms=fctMS.AdaptiveMeanShift(X,minClusterSize=10,maxClusterSize=0.75,removeBadEstimates=True) #initiates the class and estimates local cluster size
@@ -10,7 +10,7 @@ For each point, cluster size is estimated by locating the minimum density of the
     ms.clusterUnlabeledPoints() #cluster unlabeled points (those with bad cluster size estimates) to the closest cluster taking into account cluster scale
     labels=ms.labels
 
-There are 2 parameters: minClusterSize and maxClusterSize. Both can be set approximately without affecting the results as long as all clusters have a size between the minimum cluster size and the maximum cluster size.
+There are 2 parameters: minClusterSize and maxClusterSize. Both can be set approximately with a large margin without affecting the results as long as all clusters have a size between the minimum cluster size and the maximum cluster size.
 
 You can test it with example.ipynb .
 
@@ -38,7 +38,7 @@ We assume here that distance distributions will have two modes, one for the loca
 ![Chi distribution](/figure/density.png)
 Distance from each points to the star are shown on the left part of the figure. In this case the algorithm finds a bandwidth of around 2, where the min marker is on the left side.
 
-The $\gamma$ function (more details below) acts mostly as a kernel density estimator in this situation and detects the minimum density between both modes.
+The $\gamma$ function acts mostly as a kernel density estimator in this situation and detects the minimum density between both modes.
 
 $$
 \gamma (\mathbf X_{k})=\frac{Var(\mathbf X_{k})}{(\mathbf E[\mathbf X_{k}]-X_{(k)})^2},
