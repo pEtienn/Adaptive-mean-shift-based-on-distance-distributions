@@ -33,7 +33,7 @@ class ScaleLearner:
         u=np.cumsum(self.dMSorted,axis=1)/np.arange(1,n+1) #truncated means
         m2=np.cumsum(self.dMSorted**2,axis=1)/np.arange(1,n+1) #second moment
         V=m2-u**2 
-        self.gamma[:,1:]=V[:,1:]/(u[:,1:]-self.dMSorted[:,1:])**2
+        self.gamma[:,1:]=V[:,1:]/(1e-5+u[:,1:]-self.dMSorted[:,1:])**2
 
     def minDensityPositionEstimate(self,minClusterSize,maxClusterSize):
         """        
@@ -114,7 +114,8 @@ class AdaptiveMeanShift():
         self.scaleLearner=ScaleLearner(self._dM)
         self.scaleLearner.minDensityPositionEstimate(minClusterSize,maxClusterSize)
         self.closePointsThreshold=np.percentile(self.scaleLearner.dMSorted[:,0],1) #sets the treshold to combine points during meanshift
-        
+        if self.closePointsThreshold==0:
+            self.closePointsThreshold=1e-2
         self._sigmaFactor=sigmaFactor # good?
         self.X=X
         self.N=X.shape[0]
@@ -196,7 +197,7 @@ class AdaptiveMeanShift():
         sigmas=self._estimatedSigma[nIdx]
         return np.median(sigmas,axis=1)
 
-    def _clusterClosePoints(self,points,centroidWeights,labelsFirstSize,threshold=1e-1):
+    def _clusterClosePoints(self,points,centroidWeights,labelsFirstSize,threshold):
         """Combine centroids close to each other
 
         TODO: this function is pretty slow.
