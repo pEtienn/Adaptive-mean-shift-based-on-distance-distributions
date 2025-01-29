@@ -5,14 +5,16 @@ Implementation of an adaptive mean shift algorithm in python, intended to be use
 For each point, a cluster size is estimated by locating the minimum density of the distance distribution from this point to all others. During the mean shift execution, the cluster size estimation is used to adaptively change the bandwidth. 
 
 ### Typical usage
-    ms=fctMS.AdaptiveMeanShift(X,minClusterSize=10,maxClusterSize=0.75,removeBadEstimates=True) #initiates the class and estimates local cluster size
-    ms.meanShift(printClustersDebug=False) #performs mean shift
-    ms.clusterUnlabeledPoints() #cluster unlabeled points (those with bad cluster size estimates) to the closest cluster taking into account cluster scale
+    #initiates the class and estimates local cluster size
+    ms=fctMS.AdaptiveMeanShift(X,minClusterSize=10,maxClusterSize=0.75) 
+    ms.meanShift() #performs mean shift
     labels=ms.labels
 
 There are 2 parameters: minClusterSize and maxClusterSize. Both can be set approximately with a large margin without affecting the results as long as all clusters have a size between the minimum cluster size and the maximum cluster size.
 
 You can test it with example.ipynb .
+
+Below I'll discuss what are distance distributions and how they are used to estimate locally the cluster size.
 
 ## Distance distribution
 A distance distribution is the distribution of distances from one point to other points. They can be derived mathematically for a particular distribution. For example, the isotropic Gaussian distribution in $d$ dimensions has a chi distribution with $d$ degrees of freedom. The figure below shows graphically how the chi cdf can be derived by integrating on the gaussian pdf for a given radius.
@@ -35,17 +37,17 @@ Assuming $\mathbf{Y}_d$ and $\mathbf{Q}_d$ follow the same distribution, then $\
 
 We assume here that distance distributions will have two modes, one for the local cluster we are interested in and another that represents distances to other distributions. The aim of our algorithm is to find the minimum density between those 2 modes, which will be our estimate for the local bandwidth. Below is an example:
 
-![Chi distribution](/figure/density.png)
+![Chi distribution](/figure/Cluster_size_estimation.png)
 Distance from each points to the star are shown on the left part of the figure. In this case the algorithm finds a bandwidth of around 2, where the min marker is on the left side.
 
-The $\gamma$ function acts mostly as a kernel density estimator in this situation and detects the minimum density between both modes.
+The $\gamma$ function acts mostly as a kernel density estimator in this situation and detects the minimum density between both modes. Below is the definition of the $\gamma$ function
 
 $$
 \gamma (\mathbf X_{k})=\frac{Var(\mathbf X_{k})}{(\mathbf E[\mathbf X_{k}]-X_{(k)})^2},
 $$
 
 where $\mathbf X_{k}=[X_{(1)},\dots,X_{(k)}]$.
-The $\gamma$ function has high values before the first mode which avoid finding a minimum before the one we want to find. To avoid finding a minimum after the second mode we use a parameter called maxClusterSize which limits minimum finding the $maxClusterSize$  closest neighbors. There is also another parameter called minClusterSize with default value 10 which is used to avoid the variance in density with the closest neighbors. Those parameters can be loosely set and their exact value won't affect the result.
+The $\gamma$ function has high values before the first mode which avoid finding a minimum before the one we want to find. To avoid finding a minimum after the second mode we use a parameter called maxClusterSize which limits minimum finding the $maxClusterSize$  closest neighbors. There is also another parameter called minClusterSize with default value 10 which is used to avoid the variance in density with the closest neighbors. They are shown on the previous figure as "Cluster size boundaries". Those parameters can be loosely set and their exact value won't affect the result.
 
 ### Example results of cluster size estimation
 Below is an example where we esitmate the number of near neighbors (N) that are in the same cluster using the above method.
@@ -53,9 +55,25 @@ Below is an example where we esitmate the number of near neighbors (N) that are 
 
 The cluster size estimation is good for points near the center and away from other clusters. But, it is worse for points that are between clusters, where in some cases it takes the value we set for maxClusterSize.
 
-Here is another example where there is less separation between clusters and we can see that points between clusters get a N estimate above 700, which is determined by the parameter maxClusterSize in this case. Those estimates will be classified as bad and those points won't be clustered during the mean shift.
+Here is another example where there is overlap between clusters and we can see that points between clusters get a N estimate above 700, which is determined by the parameter maxClusterSize in this case. Those estimates will be classified as bad and those points won't be clustered during the mean shift.
 
 ![Chi distribution](/figure/NestimateBad.png)
+
+## The algorithm
+
+1. Estimate cluster size for each point
+    1. Calculate the ordered distance matrix.
+    2. Calculate $\gamma$.
+    3. Find the minimum within boundaries of $\gamma$ distributions from each point. The distance at that minimum will be used as kernel size later.
+    4. Remove points that have bad cluster size estimates.
+2. Perform adaptive mean shift with the estimated cluster size
+3. Classify points that have been removed previously by assigning them to the closest cluster center accounting for the scale of clusters.
+
+*Notes on the mean shift implementation*
+
+A flat and Gaussian kernel is used. The kernel size ($k$) is found with the minimum of the $\gamma$ function. All points farther the $k$ are ignored to calculate the new mean. Points farther than the center of the kernel have less weight because of the Gaussian kernel. The Gaussian kernel has parameter $\sigma=k/5$ and can be changed as a parameter.
+
+Since farther points are ignored and the bandwidth is adaptive, this algorithm can be used with high dimensionnal data but has not been tested extensively for this yet.
 
 ## Details on $\gamma$ function and the minimum detection
 

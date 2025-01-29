@@ -108,19 +108,19 @@ class AdaptiveMeanShift():
         if minClusterSize>=maxClusterSize:
             raise NameError('Invalid cluster sizes: min cluster size is bigger then max cluster size.')
         
-        self.maxClusterSize=maxClusterSize
-        self.minClusterSize=minClusterSize
+        self._maxClusterSize=maxClusterSize
+        self._minClusterSize=minClusterSize
 
-        self.scaleLearner=ScaleLearner(self._dM)
-        self.scaleLearner.minDensityPositionEstimate(minClusterSize,maxClusterSize)
-        self.closePointsThreshold=np.percentile(self.scaleLearner.dMSorted[:,0],1) #sets the treshold to combine points during meanshift
-        if self.closePointsThreshold==0:
-            self.closePointsThreshold=1e-2
+        self._scaleLearner=ScaleLearner(self._dM)
+        self._scaleLearner.minDensityPositionEstimate(minClusterSize,maxClusterSize)
+        self._closePointsThreshold=np.percentile(self._scaleLearner.dMSorted[:,0],1) #sets the treshold to combine points during meanshift
+        if self._closePointsThreshold==0:
+            self._closePointsThreshold=1e-2
         self._sigmaFactor=sigmaFactor # good?
         self.X=X
         self.N=X.shape[0]
-        self._estimatedClusterSize=self.scaleLearner.minIdx #estimate of the cluster size for each point
-        self._estimatedSigma=self.scaleLearner.dMSorted[np.arange(self.scaleLearner.dMSorted.shape[0]),self.scaleLearner.minIdx]/self._sigmaFactor
+        self._estimatedClusterSize=self._scaleLearner.minIdx #estimate of the cluster size for each point
+        self._estimatedSigma=self._scaleLearner.dMSorted[np.arange(self._scaleLearner.dMSorted.shape[0]),self._scaleLearner.minIdx]/self._sigmaFactor
         self._detectBadEstimates()
         if printInfo==True:
             print('There are '+str(np.sum(np.invert(self.goodEstimateMask)))+' bad minimum density estimates.')
@@ -140,12 +140,12 @@ class AdaptiveMeanShift():
         self._XW=DatasetWrapper(X)
 
     def _detectBadEstimates(self):
-        """Identify values that were set by the max cluster size.
+        """Identify values that were set by the max or min cluster size.
         """
-        #
         #1.1 factors checks a bit after the maxclusterSize, if the minimum changes then the minimum is caused by the maxclusterSize
-        min2=np.argmin(self.scaleLearner.filteredGamma[:,self.minClusterSize:int(self.maxClusterSize*1.1)],axis=1)+self.minClusterSize
-        self.goodEstimateMask=np.invert(min2>self._estimatedClusterSize)
+        newMinClusterSize=int(0.66*self._minClusterSize)
+        min1=np.argmin(self._scaleLearner.filteredGamma[:,newMinClusterSize:int(self._maxClusterSize*1.1)],axis=1)+newMinClusterSize
+        self.goodEstimateMask=np.invert(min1>self._estimatedClusterSize)
 
     def _changeBadNiEstimates(self):
         """Change bad cluster size estimates to the nearest valid cluster size estimate.
@@ -164,7 +164,7 @@ class AdaptiveMeanShift():
             self._estimatedClusterSize[idx[i]]=ns[ns>0][0] #first n above 0
 
         self._estimatedClusterSize=np.int64(self._estimatedClusterSize)
-        self._estimatedSigma=self.scaleLearner.dMSorted[np.arange(self.scaleLearner.dMSorted.shape[0]),self._estimatedClusterSize]/self._sigmaFactor
+        self._estimatedSigma=self._scaleLearner.dMSorted[np.arange(self._scaleLearner.dMSorted.shape[0]),self._estimatedClusterSize]/self._sigmaFactor
 
     def _removeBadEstimates(self,X):
         """Remove points with bad cluster size estimates.
@@ -238,7 +238,7 @@ class AdaptiveMeanShift():
                 
         return [clusters,newCentroidWeights,newLabelsFirstSize]
         
-    def meanShift(self,printClustersDebug=False):
+    def _meanShift(self,printClustersDebug=False):
         """Performs adaptive mean shift.
 
         Parameters
@@ -271,7 +271,7 @@ class AdaptiveMeanShift():
             for i in range(centroids.shape[0]):
                 newCentroids[i,:] = np.sum(centroids[distanceMask[i,:]]*k[i,distanceMask[i,:]][:,np.newaxis],axis=0)/np.sum(k[i,distanceMask[i,:]])
 
-            [centroids,centroidWeights,labels] = self._clusterClosePoints(newCentroids,centroidWeights,labels,threshold=self.closePointsThreshold)
+            [centroids,centroidWeights,labels] = self._clusterClosePoints(newCentroids,centroidWeights,labels,threshold=self._closePointsThreshold)
 
             #debug tools
             if printClustersDebug:
@@ -288,8 +288,8 @@ class AdaptiveMeanShift():
                 break
         
         #remove clusters smaller than minimum size
-        belowMinClusterSize=np.where(centroidWeights<self.minClusterSize)[0]
-        aboveMinClusterSize=np.where(centroidWeights>self.minClusterSize)[0]
+        belowMinClusterSize=np.where(centroidWeights<self._minClusterSize)[0]
+        aboveMinClusterSize=np.where(centroidWeights>self._minClusterSize)[0]
         for i in range(belowMinClusterSize.shape[0]):
             labels[labels==belowMinClusterSize[i]]=-1
 
@@ -303,14 +303,18 @@ class AdaptiveMeanShift():
             self.labels=labels
         
         #make sure that labels are from 0 to the number of classes, excluding -1
-        uniques=np.unique(self.labels) 
+        self.labels=self._normalizeLabels(self.labels)
+
+    def _normalizeLabels(self,labels):
+        uniques=np.unique(labels) 
         uniques=uniques[uniques>=0]
-        newLabels=np.copy(self.labels)
+        newLabels=np.copy(labels)
         for i in range(uniques.size):
-            newLabels[self.labels==uniques[i]]=i
-        self.labels=newLabels
-    
-    def clusterUnlabeledPoints(self):
+            newLabels[labels==uniques[i]]=i
+        return newLabels
+
+
+    def _clusterUnlabeledPoints(self):
         """Assigns unlabelled points to the closest cluster centroid accounting for the scale of each cluster.
         """
         points=self.X[self.labels==-1]
@@ -318,6 +322,15 @@ class AdaptiveMeanShift():
         normalizedDistance=distance**2/(2*self.centroidSigma.T**2)
         newLabels=np.argmin(normalizedDistance,axis=1)
         self.labels[self.labels==-1]=newLabels
+
+    def meanShift(self,clusterUnlabeledPoints=True):
+
+        """Performs adaptive mean shift and then clusters unlabeled points  to the closest cluster centroid 
+        accounting for the scale of each cluster.
+        """
+        self._meanShift()
+        if clusterUnlabeledPoints==True:
+            self._clusterUnlabeledPoints()
 
 def print2DNestimates(X,estimatedClusterSize):
     """Prints the cluster size estimate at each point, only works in 2D.
