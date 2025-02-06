@@ -12,21 +12,20 @@ import scipy.ndimage as ndimage
 
 import warnings
 
-class ScaleLearner:
+class DistanceDistribution:
     """
     A class used to manipulate and store information linked to distance distributions.
 
     It calculates the gamma function (a kind of KDE) on distance distributions and finds the minimum density of the gamma function.
     """
     def __init__(self,distanceMatrix):
-        self.dMSorted=np.sort(distanceMatrix,axis=1)[:,1:]
+        self.dMSorted=np.sort(distanceMatrix,axis=1)[:,1:] #removes distance of 0
 
         if self.dMSorted.ndim==2:
-            v,n=self.dMSorted.shape
+            _,n=self.dMSorted.shape
         else:
             n=self.dMSorted.size
             self.dMSorted=self.dMSorted[np.newaxis,...]
-        self.n=n
 
         self.gamma=np.ones(self.dMSorted.shape)
 
@@ -42,6 +41,7 @@ class ScaleLearner:
         """
 
         minClusterSizeRatio=5
+        #gaussian filter avoids very local variations in density where we could find a minimum
         self.filteredGamma=ndimage.gaussian_filter1d(self.gamma,minClusterSize/minClusterSizeRatio,mode='nearest',axis=1) 
 
         self.minIdx=np.int64((np.argmin(self.filteredGamma[:,minClusterSize:maxClusterSize],axis=1)+minClusterSize))
@@ -50,18 +50,8 @@ class DatasetWrapper():
     
     def __init__(self,X):
         """
+        Wrapper around a KD tree for nearest neighbor search.
         X:dataset
-        label: label for each element of X,starts from 0 and increments by 1
-        """
-        
-        """
-        if annoyFound:
-            f= X.shape[1]
-            self.tree = AnnoyIndex(f, 'euclidean')  # Length of item vector that will be indexed
-            for i in range(X.shape[0]):
-                v = X[i,:]
-                self.tree.add_item(i, v)
-            self.tree.build(10) # 10 trees
         """
 
         self.kdt = KDTree(X, leaf_size=10, metric='euclidean')
@@ -81,8 +71,8 @@ class DatasetWrapper():
 class AdaptiveMeanShift():
     """Adaptive mean shift wrapper class
     """
-    def __init__(self,X,minClusterSize=10,maxClusterSize=0.75,removeBadEstimates=True,printInfo=False,sigmaFactor=5):
-        """Estimates the local distribution size for each point.
+    def __init__(self,X,minClusterSize=10,maxClusterSize=0.75,removeBadEstimates=True,printInfo=False):
+        """Estimates the local distribution size for each point and initiates necessary values.
 
         Parameters
         ----------
@@ -97,86 +87,75 @@ class AdaptiveMeanShift():
         removeBadEstimates : bool, optional
             Removes datapoints with bad cluster size estimates, by default False
         """
-        self._dM=pairwise_distances(X)
+        def verifyAndConvertBoundaries(nbPoints,minClusterSize,maxClusterSize):
+            maxRatioClusterSize=0.8
+            if (maxClusterSize>maxRatioClusterSize and maxClusterSize<=1) or (maxClusterSize>1 and (X.shape[0]/maxClusterSize)>maxRatioClusterSize):
+                print('Maximum value for maxClusterSize is '+ str(maxRatioClusterSize) +' and has been set too high. It is now '+ str(maxRatioClusterSize)+'.')
 
-        if (maxClusterSize>0.8 and maxClusterSize<=1) or (maxClusterSize>1 and (X.shape[0]/maxClusterSize)>0.8):
-            print('Maximum value for maxClusterSize is 0.8. It is now 0.8.')
+            minClusterSize=int(minClusterSize) if minClusterSize>=1 else int(nbPoints*minClusterSize)
+            maxClusterSize=int(maxClusterSize) if maxClusterSize>=1 else int(nbPoints*maxClusterSize)
 
-        minClusterSize=int(minClusterSize) if minClusterSize>=1 else int(X.shape[0]*minClusterSize)
-        maxClusterSize=int(maxClusterSize) if maxClusterSize>=1 else int(X.shape[0]*maxClusterSize)
-
-        if minClusterSize>=maxClusterSize:
-            raise NameError('Invalid cluster sizes: min cluster size is bigger then max cluster size.')
+            if minClusterSize>=maxClusterSize:
+                raise NameError('Invalid cluster sizes: min cluster size is bigger then max cluster size.')
+            return [minClusterSize,maxClusterSize]
         
-        self._maxClusterSize=maxClusterSize
-        self._minClusterSize=minClusterSize
+        self._dM=pairwise_distances(X)
+        self.N=X.shape[0]
+        [self._minClusterSize,self._maxClusterSize]=verifyAndConvertBoundaries(self.N,minClusterSize,maxClusterSize)
 
-        self._scaleLearner=ScaleLearner(self._dM)
-        self._scaleLearner.minDensityPositionEstimate(minClusterSize,maxClusterSize)
-        self._closePointsThreshold=np.percentile(self._scaleLearner.dMSorted[:,0],1) #sets the treshold to combine points during meanshift
+        self._distanceDistributions=DistanceDistribution(self._dM)
+        self._distanceDistributions.minDensityPositionEstimate(self._minClusterSize,self._maxClusterSize)
+
+        self._closePointsThreshold=np.percentile(self._distanceDistributions.dMSorted[:,0],1) #sets the treshold to combine points during meanshift
         if self._closePointsThreshold==0:
             self._closePointsThreshold=1e-2
-        self._sigmaFactor=sigmaFactor # good?
+
         self.X=X
-        self.N=X.shape[0]
-        self._estimatedClusterSize=self._scaleLearner.minIdx #estimate of the cluster size for each point
-        self._estimatedSigma=self._scaleLearner.dMSorted[np.arange(self._scaleLearner.dMSorted.shape[0]),self._scaleLearner.minIdx]/self._sigmaFactor
-        self._detectBadEstimates()
+
+        #Setting estimated distance parameters
+        self._estimatedClusterSize=self._distanceDistributions.minIdx #estimate of the cluster size for each point
+        self._estimatedDistanceSigma=np.zeros(self.N)
+        self._estimatedDistanceMean=np.zeros(self.N)
+        for i in range(self.N):
+            self._estimatedDistanceSigma[i]=np.std(self._distanceDistributions.dMSorted[i,:self._estimatedClusterSize[i]])
+            self._estimatedDistanceMean[i]=np.mean(self._distanceDistributions.dMSorted[i,:self._estimatedClusterSize[i]])
+        self._estimatedDistanceThreshold=self._distanceDistributions.dMSorted[np.arange(self.N),self._estimatedClusterSize]
+
+        X=self._manageBadEstimates(X,printInfo,removeBadEstimates)
+
+        self._XW=DatasetWrapper(X)
+
+    def _manageBadEstimates(self,X,printInfo,removeBadEstimates=True):
+        """Manages points that have a bad cluster size estimation
+        """
+        def detectBadEstimates(filteredGamma,maxClusterSize,minClusterSize,estimatedClusterSize):
+            """Identify values that were set by the max or min cluster size.
+            """
+            #1.1 factors checks a bit after the maxclusterSize, if the minimum changes then the minimum is caused by the maxclusterSize
+            newMinClusterSize=int(0.66*minClusterSize)
+            min1=np.argmin(filteredGamma[:,newMinClusterSize:int(maxClusterSize*1.1)],axis=1)+newMinClusterSize
+            goodEstimateMask=np.invert(min1>estimatedClusterSize)
+            return goodEstimateMask
+            
+        self.goodEstimateMask=detectBadEstimates(self._distanceDistributions.filteredGamma,self._maxClusterSize,self._minClusterSize,self._estimatedClusterSize)
         if printInfo==True:
             print('There are '+str(np.sum(np.invert(self.goodEstimateMask)))+' bad minimum density estimates.')
         if removeBadEstimates==True:
-            X=self._removeBadEstimates(X)
+            mask=self.goodEstimateMask
+            X=X[mask,:]
+            self._estimatedClusterSize=self._estimatedClusterSize[mask]
+            self._estimatedDistanceSigma=self._estimatedDistanceSigma[mask]
+            self._estimatedDistanceMean=self._estimatedDistanceMean[mask]
+            self._estimatedDistanceThreshold=self._estimatedDistanceThreshold[mask]
             if printInfo==True:
                 print('They have been removed from the data used during the mean shift and assigned a label \'-1\'.')
             idx=np.where(np.invert(self.goodEstimateMask))
             dM=np.delete(self._dM,idx,axis=0)
             self._dM=np.delete(dM,idx,axis=1)
             self._badEstimatesRemoved=True
-        else:
-            self._changeBadNiEstimates
-            if printInfo==True:
-                print('To remove them from affecting the result set the parameter removeBadEstiamtes to True.')
-            self._badEstimatesRemoved=False
-        self._XW=DatasetWrapper(X)
-
-    def _detectBadEstimates(self):
-        """Identify values that were set by the max or min cluster size.
-        """
-        #1.1 factors checks a bit after the maxclusterSize, if the minimum changes then the minimum is caused by the maxclusterSize
-        newMinClusterSize=int(0.66*self._minClusterSize)
-        min1=np.argmin(self._scaleLearner.filteredGamma[:,newMinClusterSize:int(self._maxClusterSize*1.1)],axis=1)+newMinClusterSize
-        self.goodEstimateMask=np.invert(min1>self._estimatedClusterSize)
-
-    def _changeBadNiEstimates(self):
-        """Change bad cluster size estimates to the nearest valid cluster size estimate.
-        """
-
-        idx=np.argwhere(np.invert(self.goodEstimateMask))
-        proximityMatrix=np.argsort(self._dM,axis=1)
-        NOrdered=np.zeros(proximityMatrix.shape)
-        
-        for i in range(proximityMatrix.shape[1]):
-            NOrdered[proximityMatrix==i]=self._estimatedClusterSize[i]
-            
-        for i in range(idx.shape[0]):
-            ns=NOrdered[idx[i],:]
-            #print(ns)
-            self._estimatedClusterSize[idx[i]]=ns[ns>0][0] #first n above 0
-
-        self._estimatedClusterSize=np.int64(self._estimatedClusterSize)
-        self._estimatedSigma=self._scaleLearner.dMSorted[np.arange(self._scaleLearner.dMSorted.shape[0]),self._estimatedClusterSize]/self._sigmaFactor
-
-    def _removeBadEstimates(self,X):
-        """Remove points with bad cluster size estimates.
-        """
-
-        mask=self.goodEstimateMask
-        X=X[mask,:]
-        self._estimatedClusterSize=self._estimatedClusterSize[mask]
-        self._estimatedSigma=self._estimatedSigma[mask]
         return X
 
-    def _getLocalSigma(self,centroids,k=5):
+    def _getLocalDistanceParameters(self,centroids,k=5):
         """Return a sigma estimate for the centroid.
 
         Parameters
@@ -189,13 +168,14 @@ class AdaptiveMeanShift():
 
         Returns
         -------
-        Sigma parameter for each point
+        Mean, Sigma and distance threshold parameter for each point
         """
         
         nIdx=self._XW.kNN(centroids,k=k)
-
-        sigmas=self._estimatedSigma[nIdx]
-        return np.median(sigmas,axis=1)
+        means=self._estimatedDistanceMean[nIdx]
+        sigmas=self._estimatedDistanceSigma[nIdx]
+        XcThresholds=self._estimatedDistanceThreshold[nIdx]
+        return [np.median(means,axis=1)[:,np.newaxis],np.median(sigmas,axis=1)[:,np.newaxis],np.median(XcThresholds,axis=1)[:,np.newaxis]]
 
     def _clusterClosePoints(self,points,centroidWeights,labelsFirstSize,threshold):
         """Combine centroids close to each other
@@ -238,7 +218,7 @@ class AdaptiveMeanShift():
                 
         return [clusters,newCentroidWeights,newLabelsFirstSize]
         
-    def _meanShift(self,printClustersDebug=False):
+    def _meanShift(self,printClustersDebug=False,useGaussianKernel=True):
         """Performs adaptive mean shift.
 
         Parameters
@@ -246,6 +226,14 @@ class AdaptiveMeanShift():
         printClustersDebug : bool, optional
             Print clusters at each iteration after the first, only works in 2D.
         """
+        def normalizeLabels(labels):
+            uniques=np.unique(labels) 
+            uniques=uniques[uniques>=0]
+            newLabels=np.copy(labels)
+            for i in range(uniques.size):
+                newLabels[labels==uniques[i]]=i
+            return newLabels
+        
         d=self._XW.X.shape[1]
         centroids=np.copy(self._XW.X)
         labels=np.arange(self._XW.X.shape[0],dtype=np.int64)
@@ -254,48 +242,67 @@ class AdaptiveMeanShift():
         #each j loop all centroids move towards the local centroid average
         for j in range(100):
             newCentroids=np.copy(centroids) 
-            oldCentroids=np.copy(centroids) 
-            
+
+            # get local parameters, first loop we use parameters at points directly
             if j==0:
-                localSigmas=self._estimatedSigma[:,np.newaxis]
+                localSigmas=self._estimatedDistanceSigma[:,np.newaxis]
+                localMeans=self._estimatedDistanceMean[:,np.newaxis]
+                XcTresholds=self._estimatedDistanceThreshold[:,np.newaxis]
                 XcAll=self._dM
             else:
                 XcAll=pairwise_distances(centroids,centroids)
-                localSigmas=self._getLocalSigma(centroids)[:,np.newaxis]
-            XcTresholds=localSigmas*self._sigmaFactor
-            distanceMask=XcAll<XcTresholds
+                [localMeans,localSigmas,XcTresholds]=self._getLocalDistanceParameters(centroids)
 
+            distanceMask=XcAll<XcTresholds #NxN-1 matrix
+
+            #paragraph below calculate gaussian kernel values from one point to all other points on each line of the k matrix
             centroidWeightsSquare=np.tile(centroidWeights,(centroids.shape[0],1))
+            if useGaussianKernel==True:
+                k=(centroidWeightsSquare*distanceMask)*np.exp(-(XcAll*distanceMask)**2/(2*localSigmas**2))
+            else:
+                #variant of the Gaussian kernel designed for high dimensions
+                val1=(XcAll*distanceMask)-(localMeans-4*localSigmas)
+                num=val1.clip(min=0)**2
+                k=(centroidWeightsSquare*distanceMask)*np.exp(-num/(2*localSigmas**2))
+   
 
-            k=(centroidWeightsSquare*distanceMask)*np.exp(-(XcAll*distanceMask)**2/(2*localSigmas**2))
             for i in range(centroids.shape[0]):
                 newCentroids[i,:] = np.sum(centroids[distanceMask[i,:]]*k[i,distanceMask[i,:]][:,np.newaxis],axis=0)/np.sum(k[i,distanceMask[i,:]])
 
-            [centroids,centroidWeights,labels] = self._clusterClosePoints(newCentroids,centroidWeights,labels,threshold=self._closePointsThreshold)
+            [newCentroids,centroidWeights,labels] = self._clusterClosePoints(newCentroids,centroidWeights,labels,threshold=self._closePointsThreshold)
 
             #debug tools
             if printClustersDebug:
-                if j>1:
-                    print2DClusters(self.X,labels,centroids)
+                if j>0:
+                    print2DClusters(self._XW.X,labels,newCentroids)
 
-            if oldCentroids.shape[0]==centroids.shape[0] and printClustersDebug:
-                a=np.sum(np.linalg.norm(centroids-oldCentroids,axis=1))
-                print('{:.6f}'.format(a))
+                if newCentroids.shape[0]==centroids.shape[0]:
+                    a=np.sum(np.linalg.norm(centroids-newCentroids,axis=1))
+                    print('{:.6f}'.format(a))
             #######################
 
             #end condition
-            if oldCentroids.shape[0]==centroids.shape[0] and j>1 and np.sum(np.linalg.norm(centroids-oldCentroids,axis=1))<1e-5:
+            if newCentroids.shape[0]==centroids.shape[0] and j>1 and np.sum(np.linalg.norm(centroids-newCentroids,axis=1))<1e-5:
+                centroids=newCentroids
                 break
-        
+            centroids=newCentroids
+        if j==99:
+            print("_meanShift performed 100 loops without detecting end conditions, there might be a problem.")
+
         #remove clusters smaller than minimum size
         belowMinClusterSize=np.where(centroidWeights<self._minClusterSize)[0]
         aboveMinClusterSize=np.where(centroidWeights>self._minClusterSize)[0]
         for i in range(belowMinClusterSize.shape[0]):
             labels[labels==belowMinClusterSize[i]]=-1
-
-        self.centroidSigma=localSigmas[aboveMinClusterSize]
-        self.clusterCentroids=centroids[aboveMinClusterSize]
         self.centroidWeights=centroidWeights[aboveMinClusterSize]
+        self.clusterCentroids=centroids[aboveMinClusterSize]
+
+        #estimates sigma for each cluster
+        self.centroidSigma=np.zeros(self.centroidWeights.shape)
+        for i in range(self.clusterCentroids.shape[0]):
+            [_,localSigmas,_]=self._getLocalDistanceParameters(centroids[[i],:],k=int(self.centroidWeights[i]/5))
+            self.centroidSigma[i]=localSigmas
+            
         if self._badEstimatesRemoved==True:
             self.labels=-np.ones(self.N)
             self.labels[self.goodEstimateMask]=labels
@@ -303,34 +310,24 @@ class AdaptiveMeanShift():
             self.labels=labels
         
         #make sure that labels are from 0 to the number of classes, excluding -1
-        self.labels=self._normalizeLabels(self.labels)
+        self.labels=normalizeLabels(self.labels)
 
-    def _normalizeLabels(self,labels):
-        uniques=np.unique(labels) 
-        uniques=uniques[uniques>=0]
-        newLabels=np.copy(labels)
-        for i in range(uniques.size):
-            newLabels[labels==uniques[i]]=i
-        return newLabels
-
-
-    def _clusterUnlabeledPoints(self):
+    def _classifyUnlabeledPoints(self):
         """Assigns unlabelled points to the closest cluster centroid accounting for the scale of each cluster.
         """
         points=self.X[self.labels==-1]
         distance=pairwise_distances(points,self.clusterCentroids)
-        normalizedDistance=distance**2/(2*self.centroidSigma.T**2)
+        normalizedDistance=(distance**2)/(2*self.centroidSigma.T**2)
         newLabels=np.argmin(normalizedDistance,axis=1)
         self.labels[self.labels==-1]=newLabels
 
-    def meanShift(self,clusterUnlabeledPoints=True):
-
+    def meanShift(self,classifyUnlabeledPoints=True,printClustersDebug=False,useGaussianKernel=True):
         """Performs adaptive mean shift and then clusters unlabeled points  to the closest cluster centroid 
         accounting for the scale of each cluster.
         """
-        self._meanShift()
-        if clusterUnlabeledPoints==True:
-            self._clusterUnlabeledPoints()
+        self._meanShift(printClustersDebug,useGaussianKernel)
+        if classifyUnlabeledPoints==True and np.sum(self.labels==-1)>0:
+            self._classifyUnlabeledPoints()
 
 def print2DNestimates(X,estimatedClusterSize):
     """Prints the cluster size estimate at each point, only works in 2D.

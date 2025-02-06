@@ -71,7 +71,7 @@ Here is another example where there is overlap between clusters and we can see t
 
 *Notes on the mean shift implementation*
 
-A flat and Gaussian kernel is used. The kernel size ($k$) is found with the minimum of the $\gamma$ function. All points farther the $k$ are ignored to calculate the new mean. Points farther than the center of the kernel have less weight because of the Gaussian kernel. The Gaussian kernel has parameter $\sigma=k/5$ and can be changed as a parameter.
+A flat and Gaussian kernel is used. The kernel size ($k_s$) is found with the minimum of the $\gamma$ function. All points farther then $k_s$ are ignored to calculate the new mean. Points farther than the center of the kernel have less weight because of the Gaussian kernel. The Gaussian kernel has parameter $\sigma=k_s/5$ and can be changed as a parameter.
 
 Since farther points are ignored and the bandwidth is adaptive, this algorithm can be used with high dimensionnal data but has not been tested extensively for this yet.
 
