@@ -6,7 +6,7 @@ For each point, a cluster size is estimated by locating the minimum density of t
 
 ### Typical usage
     #initiates the class and estimates local cluster size
-    ms=fctMS.AdaptiveMeanShift(X,minClusterSize=10,maxClusterSize=0.75) 
+    ms=fctMS.AdaptiveMeanShift(X,minClusterSize=10,maxClusterSize=0.7) 
     ms.meanShift() #performs mean shift
     labels=ms.labels
 
