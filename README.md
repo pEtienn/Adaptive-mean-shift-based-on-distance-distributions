@@ -49,4 +49,4 @@ $$
 where $\mathbf X_{k}=[X_{(1)},\dots,X_{(k)}]$.
 The $\gamma$ function has high values before the first mode which avoid finding a minimum before the one we want to find. To avoid finding a minimum after the second mode we use a parameter called maxClusterSize which limits minimum finding the $maxClusterSize$  closest neighbors. There is also another parameter called minClusterSize with default value 10 which is used to avoid the variance in density with the closest neighbors. They are shown on the previous figure as "Cluster size boundaries". Those parameters can be loosely set and their exact value won't affect the result.
 
-Once the local cluster cardinality is estimated, any statistics can be calculated on the a local distribution of distances.
+Once the local cluster cardinality is estimated, any statistics can be calculated on the local distribution of distances. Those statistics are than used to adapt the mode seeking process of the mean shift locally.
